@@ -94,7 +94,7 @@ class TestAspDBCppFile(unittest.TestCase):
         if len(aspf.cpp_structs) == 2:
             self.assertEqual(aspf.cpp_structs[0].name, 'test')
             self.assertEqual(aspf.cpp_structs[1].name, 'test2')
-            aspf.init_structs()
+            # aspf.init_structs()
 
             # first field of `test`
             self.assertEqual(len(aspf.cpp_structs[0].fields), 2)
@@ -116,6 +116,53 @@ class TestAspDBCppFile(unittest.TestCase):
             self.assertFalse(aspf.cpp_structs[1].fields[0].is_array)
         else:
             self.assertTrue(False)
+
+    def test_init_structs2(self):
+        s = 'struct ASP_TABLE test {' \
+            '  field(integer i, NOT_NULL);' \
+            '  field(text a);' \
+            '' \
+            '  primary_key(id)' \
+            '' \
+            '  field_fkey(bigint fkey, NOT_NULL)' \
+            '  reference(fkey, ex(sad), CASCADE, RESTRICT)' \
+            '};'
+        aspf = cparser_lite.AspDBCppFile(s)
+        aspf.init_structs()
+        self.assertEqual(aspf.cpp_structs[0].name, 'test')
+        self.assertEqual(aspf.cpp_structs[0].fields[0].asp_type, 'integer')
+        self.assertEqual(aspf.cpp_structs[0].fields[0].asp_name, 'i')
+        self.assertTrue(aspf.cpp_structs[0].fields[0].not_null)
+        self.assertFalse(aspf.cpp_structs[0].fields[0].is_array)
+        self.assertEqual(aspf.cpp_structs[0].fields[1].asp_type, 'text')
+        self.assertEqual(aspf.cpp_structs[0].fields[1].asp_name, 'a')
+        self.assertFalse(aspf.cpp_structs[0].fields[1].not_null)
+        self.assertFalse(aspf.cpp_structs[0].fields[1].is_array)
+        # pk
+        self.assertEqual(aspf.cpp_structs[0].primary_key, 'id')
+        # fk field
+        self.assertEqual(aspf.cpp_structs[0].foreign_refs[0].field.asp_type, 'bigint')
+        self.assertEqual(aspf.cpp_structs[0].foreign_refs[0].field.asp_name, 'fkey')
+        self.assertTrue(aspf.cpp_structs[0].foreign_refs[0].field.not_null)
+        self.assertFalse(aspf.cpp_structs[0].foreign_refs[0].field.is_array)
+        # fk ref
+        self.assertEqual(aspf.cpp_structs[0].foreign_refs[0].ref.name, 'fkey')
+        self.assertEqual(aspf.cpp_structs[0].foreign_refs[0].ref.ftable, 'ex')
+        self.assertEqual(aspf.cpp_structs[0].foreign_refs[0].ref.ftable_pk, 'sad')
+        self.assertEqual(aspf.cpp_structs[0].foreign_refs[0].ref.on_update,
+                         cparser_lite.AspDBRefAction.CASCADE)
+        self.assertEqual(aspf.cpp_structs[0].foreign_refs[0].ref.on_delete,
+                         cparser_lite.AspDBRefAction.RESTRICT)
+
+
+class TestAspDBForeignField(unittest.TestCase):
+    def test_init_ff(self):
+        ff = cparser_lite.AspDBReference('eman', 'qwerty(id)', 'CASCADE', 'RESTRICT')
+        self.assertEqual(ff.name, 'eman')
+        self.assertEqual(ff.ftable, 'qwerty')
+        self.assertEqual(ff.ftable_pk, 'id')
+        self.assertEqual(ff.on_update, cparser_lite.AspDBRefAction.CASCADE)
+        self.assertEqual(ff.on_delete, cparser_lite.AspDBRefAction.RESTRICT)
 
 
 if __name__ == '__main__':
