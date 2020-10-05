@@ -3,6 +3,7 @@
 Тестирования модуля cparser_lite
 """
 import cparser_lite
+import asp_db_cpp
 import unittest
 
 
@@ -73,14 +74,14 @@ class TestStringMethods(unittest.TestCase):
 cpp_text = '#define SOME_DEFINE' \
            '' \
            'struct ASP_TABLE test {' \
-           '  field(integer id, NOT_NULL);' \
-           '  field(text name, NOT_NULL);' \
+           '  field(integer, id, NOT_NULL);' \
+           '  field(text, name, NOT_NULL);' \
            '' \
            '  primary_key(id)' \
            '};' \
            '' \
            'struct ASP_TABLE test2 {' \
-           '  field(integer id, NOT_NULL)' \
+           '  field(integer, id, NOT_NULL)' \
            '};' \
            '// end of file' \
            ''
@@ -88,7 +89,7 @@ cpp_text = '#define SOME_DEFINE' \
 
 class TestAspDBCppFile(unittest.TestCase):
     def test_init_structs(self):
-        aspf = cparser_lite.AspDBCppFile(cpp_text)
+        aspf = asp_db_cpp.AspDBCppFile(cpp_text)
         aspf.init_structs()
         self.assertEqual(len(aspf.cpp_structs), 2)
         if len(aspf.cpp_structs) == 2:
@@ -119,15 +120,15 @@ class TestAspDBCppFile(unittest.TestCase):
 
     def test_init_structs2(self):
         s = 'struct ASP_TABLE test {' \
-            '  field(integer i, NOT_NULL);' \
-            '  field(text a);' \
+            '  field(integer, i, NOT_NULL);' \
+            '  field(text, a);' \
             '' \
-            '  primary_key(id)' \
+            '  primary_key(i)' \
             '' \
-            '  field_fkey(bigint fkey, NOT_NULL)' \
+            '  field_fkey(bigint, fkey, NOT_NULL)' \
             '  reference(fkey, ex(sad), CASCADE, RESTRICT)' \
             '};'
-        aspf = cparser_lite.AspDBCppFile(s)
+        aspf = asp_db_cpp.AspDBCppFile(s)
         aspf.init_structs()
         self.assertEqual(aspf.cpp_structs[0].name, 'test')
         self.assertEqual(aspf.cpp_structs[0].fields[0].asp_type, 'integer')
@@ -139,7 +140,7 @@ class TestAspDBCppFile(unittest.TestCase):
         self.assertFalse(aspf.cpp_structs[0].fields[1].not_null)
         self.assertFalse(aspf.cpp_structs[0].fields[1].is_array)
         # pk
-        self.assertEqual(aspf.cpp_structs[0].primary_key, 'id')
+        self.assertEqual(aspf.cpp_structs[0].primary_key, ['i'])
         # fk field
         self.assertEqual(aspf.cpp_structs[0].foreign_refs[0].field.asp_type, 'bigint')
         self.assertEqual(aspf.cpp_structs[0].foreign_refs[0].field.asp_name, 'fkey')
@@ -150,19 +151,19 @@ class TestAspDBCppFile(unittest.TestCase):
         self.assertEqual(aspf.cpp_structs[0].foreign_refs[0].ref.ftable, 'ex')
         self.assertEqual(aspf.cpp_structs[0].foreign_refs[0].ref.ftable_pk, 'sad')
         self.assertEqual(aspf.cpp_structs[0].foreign_refs[0].ref.on_update,
-                         cparser_lite.AspDBRefAction.CASCADE)
+                         asp_db_cpp.AspDBRefAction.CASCADE)
         self.assertEqual(aspf.cpp_structs[0].foreign_refs[0].ref.on_delete,
-                         cparser_lite.AspDBRefAction.RESTRICT)
+                         asp_db_cpp.AspDBRefAction.RESTRICT)
 
 
 class TestAspDBForeignField(unittest.TestCase):
     def test_init_ff(self):
-        ff = cparser_lite.AspDBReference('eman', 'qwerty(id)', 'CASCADE', 'RESTRICT')
+        ff = asp_db_cpp.AspDBReference('eman', 'qwerty(id)', 'CASCADE', 'RESTRICT')
         self.assertEqual(ff.name, 'eman')
         self.assertEqual(ff.ftable, 'qwerty')
         self.assertEqual(ff.ftable_pk, 'id')
-        self.assertEqual(ff.on_update, cparser_lite.AspDBRefAction.CASCADE)
-        self.assertEqual(ff.on_delete, cparser_lite.AspDBRefAction.RESTRICT)
+        self.assertEqual(ff.on_update, asp_db_cpp.AspDBRefAction.CASCADE)
+        self.assertEqual(ff.on_delete, asp_db_cpp.AspDBRefAction.RESTRICT)
 
 
 if __name__ == '__main__':

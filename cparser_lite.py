@@ -1,9 +1,7 @@
-#!/usr/bin/env python
 """
 Модуль парсинга и генерации С файлов
 """
 import re
-from enum import Enum
 
 
 def cpp_comment_remover(text):
@@ -84,12 +82,28 @@ class ICppFunctions:
         pass
 
 
-class AspDBCppFunctions(ICppFunctions):
+class CppEnum:
     """
-    Класс инкапсулирующий функционал инициализации данных AspDB
+    Cpp представление class enum'а
     """
-    def init_cpp_structs(self, name, source):
-        return AspDBCppStructs(name, source)
+    def __init__(self, name):
+        self.name = name
+        self.fields = list()
+        self.nums = set()
+
+    def try_add_field(self, name, num):
+        """
+        Добавить параметр к enum
+
+        :param name: Имя параметра
+        :param num: Номер параметра
+        :return: True если значение добавлено
+                 False иначе
+        """
+        if num not in self.nums:
+            self.fields.append([name, num])
+        else:
+            raise Exception('Number ' + str(num) + ' already in use')
 
 
 class CppStructs:
@@ -107,233 +121,11 @@ class CppStructs:
         # поля структуры
         self.fields = list()
 
+    def get_name(self):
+        return self.name
+
     def init_data(self):
         pass
-
-
-class AspDBField:
-    """
-    Структура описывающая поля таблиц ASP_TABLE
-    """
-    def __init__(self, asp_type, asp_name, asp_args):
-        """
-        Инициализировать поле таблицы
-
-        :param asp_type: Тип поля
-        :param asp_name: Имя поля
-        :param asp_args: Массив аргументов
-        """
-        self.asp_type = asp_type
-        self.asp_name = asp_name
-        self.asp_args = [x.strip().upper() for x in asp_args.split(',')]
-        # флаги полей
-        self.not_null = False
-        self.is_array = False
-        self.parse_arguments()
-
-    def parse_arguments(self):
-        if 'NOT_NULL' in self.asp_args:
-            self.not_null = True
-        if 'ARRAY' in self.asp_args:
-            self.is_array = True
-
-
-class AspDBRefAction(Enum):
-    """
-    Перечисление действий со ссылочными типами
-    """
-    # no act
-    NON = 0
-    # cascade
-    CASCADE = 1
-    # restrict
-    RESTRICT = 2
-
-
-def set_ref_action(act):
-    """
-    Получить код действия со ссылкой
-
-    :param act: Строковое представление действия со ссылкой
-    :return: Возвращает соответствующий enum
-    """
-    if act.upper() == 'CASCADE':
-        return AspDBRefAction.CASCADE
-    if act.upper() == 'RESTRICT':
-        return AspDBRefAction.RESTRICT
-    return AspDBRefAction.NON
-
-
-class AspDBReference:
-    """
-    Структура внешнего ключа таблиц
-    """
-    def __init__(self, name, ftable_ref, on_update, on_delete):
-        """
-        Инициализировать ссылку
-
-        :param name: Имя поля ссылки
-        :param ftable_ref: Ссылка на поле внешней таблицы вида 'FTABLE(FTABLE_PK)'
-        :param on_update: Update метод
-        :param on_delete: Delete метод
-        """
-        self.name = name
-        self.ftable, self.ftable_pk = self.init_fkey_ref(ftable_ref)
-        self.on_update = set_ref_action(on_update)
-        self.on_delete = set_ref_action(on_delete)
-
-    def init_fkey_ref(self, ftable_ref):
-        return ftable_ref[: ftable_ref.find('(')].strip(), get_brace_content(ftable_ref, '(', ')').strip()
-
-
-class AspDBCppForeignData:
-    """
-    Класс данных внешней таблицы - имя, поле,
-    """
-    def __init__(self, field, ref):
-        """
-        Инициализировать объект данных ссылки на внешнюю таблицу
-
-        :param field: Поле этой ссылки
-        :param ref: Данные ссылки
-        """
-        self.field = field
-        self.ref = ref
-
-
-class AspDBCppStructs(CppStructs):
-    def __init__(self, name, source):
-        super(AspDBCppStructs, self).__init__(name, source)
-        self.primary_key = ''
-        self.foreign_refs = list()
-        self.unique = list()
-        self.init_data()
-
-    def init_data(self):
-        """
-        Инициализировать данные
-        :return:
-        """
-        # инициализировать поля
-        self.fields = self.init_fields(r'field\s*\(')
-        # инициализировать первичный ключ
-        self.primary_key = self.init_primary_key()
-        # инициализировать ссылки на другие таблицы
-        self.foreign_refs = self.init_foreign_tables()
-        # инициализировать уникальный комплексы
-        self.unique = self.init_unique()
-
-    def init_fields(self, fields_pattern):
-        """
-        Инициализировать поля таблицы
-
-        :param fields_pattern: Строковой паттерн поиска полей
-        :return: Лист проинциализированных полей
-        """
-        fields = re.findall(fields_pattern, self.source)
-        missed = []
-        result_list = list()
-        field_ind = -1
-        for field in fields:
-            field_ind = self.source.find(field, field_ind + 1)
-            if field_ind == -1:
-                missed.append(field + ' ~~ cannot find field in struct')
-                continue
-            content = get_brace_content(self.source[field_ind:], '(', ')')
-            params = content.split(',')
-            # имя и тип
-            try:
-                sind = params[0].rfind(' ')
-                if sind == -1:
-                    raise IndexError
-                result_list.append(AspDBField(params[0][:sind], params[0][sind + 1:],
-                                              params[1] if len(params) > 1 else ''))
-            except IndexError as e:
-                print('Error for parsing field type|name for ' + params[0])
-        if len(missed) > 0:
-            print('Warning: AspDBCppStruct.init_fields finished with errors')
-            print(missed)
-        return result_list
-
-    def init_primary_key(self):
-        """
-        Инициализировать первичный ключ
-
-        :return: Первичный ключ
-        """
-        pk_id = self.source.find('primary_key')
-        pk = ''
-        if pk_id != -1:
-            pk = get_brace_content(self.source[pk_id:], '(', ')').strip()
-        return pk
-
-    def init_foreign_tables(self):
-        """
-        Инициализировать ссылки на другие таблицы
-
-        :return: Nothing
-        """
-        # fields
-        fkey_fields = self.init_fields(r'field_fkey\s*\(')
-        # references
-        references = self.init_references()
-        # list of foreign_table_refs
-        foreign_data = list()
-        # check pairs fkey_field - reference
-        for fkey_field in fkey_fields:
-            # имя поля
-            ffname = fkey_field.asp_name
-            # нашлась соответствующая ссылка
-            matched = False
-            for ref in references:
-                if ref.name == ffname:
-                    foreign_data.append(AspDBCppForeignData(fkey_field, ref))
-                    matched = True
-                    break
-            if not matched:
-                print('Foreign data initialization error! No reference for ' + ffname)
-        if len(fkey_fields) != len(references):
-            print('Item count mismatch for `fkey_fields` and `references`')
-        return foreign_data
-
-    def init_references(self):
-        """
-        Инициализировать ссылки на другие таблицы
-
-        :return: Список ссылок
-        """
-        refs = re.findall(r'reference\s*\(', self.source)
-        ref_ind = -1
-        result_list = list()
-        missed = []
-        for ref in refs:
-            ref_ind = self.source.find(ref, ref_ind + 1)
-            if ref_ind == -1:
-                missed.append(ref + ' ~~ cannot find ref')
-                continue
-            ref_fields = get_brace_content(self.source[ref_ind:], '(', ')').split(',')
-            if len(ref_fields) < 3:
-                missed.append(ref + ' ~~ cannot split ref')
-                continue
-            result_list.append(AspDBReference(ref_fields[0], ref_fields[1],
-                                              ref_fields[2].strip(), ref_fields[3].strip()))
-        if len(missed) > 0:
-            print('Warning: AspDBCppStruct.init_references finished with errors')
-            print(missed)
-        return result_list
-
-    def init_unique(self):
-        """
-        Инициализировать уникальный комплекс
-
-        :return: Nothing
-        """
-        unique_id = self.source.find('unique')
-        unique = list()
-        if unique_id != -1:
-            unique_str = get_brace_content(self.source, '(', ')')
-            unique = [f.strip() for f in unique_str.split(',')]
-        return unique
 
 
 class CppFile:
@@ -414,13 +206,3 @@ class CppFile:
         head_str = head_str.replace('{', '')
         return head_str.strip()
 
-
-class AspDBCppFile(CppFile):
-    """
-    Python инициализатор для модуля ASP_DB
-    """
-    def __init__(self, text):
-        super(AspDBCppFile, self).__init__(text, AspDBCppFunctions())
-
-    def get_class_marker(self):
-        return 'ASP_TABLE'
