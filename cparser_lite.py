@@ -100,10 +100,13 @@ class CppEnum:
         :return: True если значение добавлено
                  False иначе
         """
+        result = False
         if num not in self.nums:
             self.fields.append([name, num])
+            result = True
         else:
-            raise Exception('Number ' + str(num) + ' already in use')
+            print('Number ' + str(num) + ' already in use')
+        return result
 
 
 class CppStructs:

@@ -22,14 +22,19 @@ class AspDBTableText:
 
         :return: CppEnum с соответствующими флагами полей
         """
+        # fields
         flags = cpplite.CppEnum('flags_' + self.cpp_struct.name)
         for i, field in enumerate(self.cpp_struct.fields):
-            if not flags.try_add_field('f_' + field.get_name(), pow(2, i + 1, __mod=int)):
+            if not flags.try_add_field('f_' + field.get_name(), pow(2, i)):
                 raise BaseException('Error append flags enum for struct ' + self.cpp_struct.name)
+        fields_count = len(self.cpp_struct.fields)
+        # refs
+        for j, ref in enumerate(self.cpp_struct.foreign_refs):
+            if not flags.try_add_field('f_' + ref.field.get_name(), pow(2, j + fields_count)):
+                raise BaseException('Error append flags enum for struct ' + self.cpp_struct.name)
+        fields_count += len(self.cpp_struct.foreign_refs)
         # добавить full параметр
-        flags.try_add_field('f_full', pow(2, len(self.cpp_struct.fields) + 1, __mod=int) - 1)
-        # TODO: add test: 2 * flags('f_full')[1] == SUM [flag[1] in flags],
-        #   короч, что флаг 'f_full' равен сумме остальных
+        flags.try_add_field('f_full', pow(2, fields_count) - 1)
         return flags
 
     def enum_as_text(self):
@@ -38,12 +43,12 @@ class AspDBTableText:
 
         :return: Текстовое представление enum
         """
-        et = 'class enum ' + self.flags_enum.name + ' {\n'
+        et = 'enum ' + self.flags_enum.name + ' {\n'
         if len(self.flags_enum.fields) > 0:
-            et += self.flags_enum.fields[0][0] + ' = ' + str(hex(self.flags_enum.fields[0][1]))
+            et += '  ' + self.flags_enum.fields[0][0] + ' = ' + format(self.flags_enum.fields[0][1], '#06x')
             for field in self.flags_enum.fields[1:]:
-                et += ',\n' + field[0] + str(hex(field[1]))
-        et += '};\n'
+                et += ',\n  ' + field[0] + " = " + format(field[1], '#06x')
+        et += '\n};\n'
         return et
 
 
@@ -92,7 +97,7 @@ class AspDBTablesGenerator:
     Инкапсулированный функционал генерации .cpp файлов
     """
 
-    def __init__(self, header_file):
+    def __init__(self, header_file, module_name=''):
         """
         Инициализировать данные таблиц
 
@@ -109,7 +114,8 @@ class AspDBTablesGenerator:
         self.db_tables_enum = ''
         # имя реализующего интерфейс IDBTables класса таблиц
         self.db_tables_class = ''
-        self.module_name = header_file[: header_file.find('.')]
+        if not module_name:
+            self.module_name = header_file[: header_file.find('.')]
         self.asp_tables = aspdb.AspDBCppFile(self.header_file)
 
     def generate_files(self):
@@ -122,7 +128,8 @@ class AspDBTablesGenerator:
 
     def update_original_header(self):
         """
-        Обновить хэддер с оригинальными таблицами
+        Обновить хэддер с оригинальными таблицами. Enum прописать, сэттеры
+
         :return:
         """
         raise Exception

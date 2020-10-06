@@ -78,6 +78,7 @@ cpp_text = '#define SOME_DEFINE' \
            '  field(text, name, NOT_NULL);' \
            '' \
            '  primary_key(id)' \
+           '  unique(name, num)' \
            '};' \
            '' \
            'struct ASP_TABLE test2 {' \
@@ -115,8 +116,6 @@ class TestAspDBCppFile(unittest.TestCase):
             self.assertEqual(aspf.cpp_structs[1].fields[0].asp_name, 'id')
             self.assertTrue(aspf.cpp_structs[1].fields[0].not_null)
             self.assertFalse(aspf.cpp_structs[1].fields[0].is_array)
-        else:
-            self.assertTrue(False)
 
     def test_init_structs2(self):
         s = 'struct ASP_TABLE test {' \
