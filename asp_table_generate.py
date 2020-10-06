@@ -2,7 +2,8 @@
 """
 Генератор cpp файлов
 """
-import cparser_lite
+import cparser_lite as cpplite
+import asp_db_cpp as aspdb
 
 
 class AspDBTableText:
@@ -21,7 +22,7 @@ class AspDBTableText:
 
         :return: CppEnum с соответствующими флагами полей
         """
-        flags = cparser_lite.CppEnum('flags_' + self.cpp_struct.name)
+        flags = cpplite.CppEnum('flags_' + self.cpp_struct.name)
         for i, field in enumerate(self.cpp_struct.fields):
             if not flags.try_add_field('f_' + field.get_name(), pow(2, i + 1, __mod=int)):
                 raise BaseException('Error append flags enum for struct ' + self.cpp_struct.name)
@@ -108,13 +109,14 @@ class AspDBTablesGenerator:
         self.db_tables_enum = ''
         # имя реализующего интерфейс IDBTables класса таблиц
         self.db_tables_class = ''
-        self.asp_tables = cparser_lite.AspDBCppFile(self.header_file)
+        self.module_name = header_file[: header_file.find('.')]
+        self.asp_tables = aspdb.AspDBCppFile(self.header_file)
 
     def generate_files(self):
         self.asp_tables.init_structs()
         self.set_class_name()
         self.tables = self.init_tables()
-        self.update_original_header()
+        # self.update_original_header()
         self.init_tables_header()
         self.init_tables_source()
 
@@ -148,8 +150,7 @@ class AspDBTablesGenerator:
         self.db_tables_enum = self.db_tables_enum + '_tables'
         # класс наследник IDBTables
         self.db_tables_class = self.db_tables_ns[:1].upper() +\
-                               self.db_tables_ns[1:].lower() +\
-                               self.asp_db_interface[1:]
+                               self.db_tables_ns[1:].lower() + self.asp_db_interface[1:]
 
     def init_tables_header(self):
         """
@@ -161,7 +162,8 @@ class AspDBTablesGenerator:
         text = self.add_defines_h()
         text += self.add_data_structs_h()
         text += self.add_template_specification_h()
-        raise Exception('header text')
+        with open(self.module_name + self.files_suffix + '.h ', 'w') as f:
+            f.write(text)
 
     def add_defines_h(self):
         """
@@ -242,7 +244,11 @@ class AspDBTablesGenerator:
 
         :return:
         """
-        raise Exception
+        text = self.add_tables_map()
+        for struct in self.asp_tables.cpp_structs:
+            text += self.add_table_fields(struct)
+        with open(self.module_name + self.files_suffix + '.cpp ', 'w') as f:
+            f.write(text)
 
     def add_tables_map(self):
         text = 'static std::map<db_table, std::string> str_tables = {\n'
@@ -253,7 +259,8 @@ class AspDBTablesGenerator:
 
     def add_table_fields(self, struct):
         # fields collection
-        text = '\nconst db_fields_collection ' + struct.get_name() + '_fields = {\n'
+        fields_name = struct.get_name() + '_fields'
+        text = '\nconst db_fields_collection ' + fields_name + ' = {\n'
         for field in struct.fields:
             text += '  db_variable(TABLE_FIELD_PAIR(' + get_field_define(field.get_name())\
                     + '), ' + field.asp_type + ',\n'
@@ -271,22 +278,32 @@ class AspDBTablesGenerator:
         text += '};\n'
 
         # unique
+        unique_name = struct.get_name() + '_uniques'
+        unique_str = 'static const db_table_create_setup::uniques_container ' + \
+                     unique_name + ' = {'
         if struct.unique:
-            unique_str = 'static const db_table_create_setup::uniques_container ' + \
-                         struct.get_name() + '_uniques = {\n'
-            unique_str += '  {{ '
+            unique_str += '\n  {{ '
             for field in struct.fields:
                 unique_str += ' TABLE_FIELD_NAME(' + get_field_define(field.get_name()) + '),\n'
             unique_str += '}}\n'
-            text += '\n' + unique_str + '};\n'
+        text += '\n' + unique_str + '};\n'
 
         # references
+        ref_name = struct.name + '_references'
         if struct.foreign_keys:
-            ref_str = 'static const std::shared_ptr<db_ref_collection> ' + struct.name + '_references(\n' +\
-                      'new db_ref_collection {\n'
+            ref_str = 'static const std::shared_ptr<db_ref_collection> ' + ref_name + '(\n  new db_ref_collection {\n'
             for ref in struct.foreign_keys:
-                ref_str += 'db_reference(TABLE_FIELD_NAME(' + ref.field.get_name() + ')'
+                ref_str += '\ndb_reference(TABLE_FIELD_NAME(' + ref.field.get_name() + '), ' + ref.ref.get_ftable() +\
+                           ',\n' + ref.ref.get_ftable_pk() + ', true, ' + aspdb.ref_act_type(ref.ref.get_update_act) +\
+                           ',\n ' + aspdb.ref_act_type(ref.ref.get_delete_act) + ')'
             ref_str += '});\n'
-            raise Exception('')
+            text += ref_str
+
+        text += '\n'
+        # create_setup
+        create_setup = 'static const db_table_create_setup ' + struct.name + '_create_setup(\n'
+        create_setup += '  ' + get_table_enum(struct.name) + ', ' + fields_name + ',\n  ' + unique_name + ', '
+        create_setup += ref_name if struct.foreign_keys else 'nullptr'
+        create_setup += ');\n'
 
         return text

@@ -57,6 +57,8 @@ class AspDBRefAction(Enum):
     CASCADE = 1
     # restrict
     RESTRICT = 2
+    # set null
+    SET_NULL = 3
 
 
 def set_ref_action(act):
@@ -68,9 +70,31 @@ def set_ref_action(act):
     """
     if act.upper() == 'CASCADE':
         return AspDBRefAction.CASCADE
-    if act.upper() == 'RESTRICT':
+    elif act.upper() == 'RESTRICT':
         return AspDBRefAction.RESTRICT
+    elif act.upper() == 'SET NULL':
+        return AspDBRefAction.SET_NULL
     return AspDBRefAction.NON
+
+
+def ref_act_type(act):
+    """
+    Получить строковое представление типа действия
+
+    :param act: Enum действия
+    :return:
+    """
+    if type(act) != AspDBRefAction:
+        raise BaseException('Несоответсвующий тип для восстанавления типа '
+                            '`AspDBRefAction`: ' + str(type(act)))
+    if act == AspDBRefAction.CASCADE:
+        return 'db_reference_act::ref_act_cascade'
+    elif act == AspDBRefAction.RESTRICT:
+        return 'db_reference_act::ref_act_restrict'
+    elif act == AspDBRefAction.SET_NULL:
+        return 'db_reference_act::ref_act_set_null'
+    else:
+        return 'db_reference_act::ref_act_not'
 
 
 class AspDBReference:
@@ -92,7 +116,20 @@ class AspDBReference:
         self.on_delete = set_ref_action(on_delete)
 
     def init_fkey_ref(self, ftable_ref):
-        return ftable_ref[: ftable_ref.find('(')].strip(), cpplite.get_brace_content(ftable_ref, '(', ')').strip()
+        return ftable_ref[: ftable_ref.find('(')].strip(),\
+               cpplite.get_brace_content(ftable_ref, '(', ')').strip()
+
+    def get_ftable(self):
+        return self.ftable
+
+    def get_ftable_pk(self):
+        return self.ftable_pk
+
+    def get_update_act(self):
+        return self.on_update
+
+    def get_delete_act(self):
+        return self.on_delete
 
 
 class AspDBCppForeignData:
@@ -111,6 +148,9 @@ class AspDBCppForeignData:
 
 
 class AspDBCppStructs(cpplite.CppStructs):
+    """
+    Cpp структура таблицы в формате метатаблицы asp_db
+    """
     def __init__(self, name, source):
         super(AspDBCppStructs, self).__init__(name, source)
         self.primary_key = list()
