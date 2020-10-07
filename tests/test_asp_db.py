@@ -3,29 +3,29 @@ import asp_db_cpp
 import unittest
 import os
 
-cpp_text = '#ifndef SOME_DEFINE' \
-           '#define SOME_DEFINE' \
-           '' \
-           'struct ASP_TABLE test {' \
-           '  field(integer, id, NOT_NULL);' \
-           '  field(text, name, NOT_NULL);' \
-           '' \
-           '  primary_key(id)' \
-           '};' \
-           '' \
-           'struct ASP_TABLE test2 {' \
-           '  field(integer, id, NOT_NULL);' \
-           '  field_fkey(bigint, fid);' \
-           '  field_fkey(bigint, ffid);' \
-           '' \
-           '  primary_key(id, fid)' \
-           '/* ссылка на первую таблицу */' \
-           '  reference(fid, test(id), CASCADE, SET NULL)' \
-           '/* ссылка на внешнюю таблицу */' \
-           '  reference(ffid, ftest(id), CASCADE, CASCADE)' \
-           '};' \
-           '// end of file' \
-           '#endif'
+cpp_text = '#ifndef SOME_DEFINE\n' \
+           '#define SOME_DEFINE\n' \
+           '\n' \
+           'struct ASP_TABLE test {\n' \
+           '  field(integer, id, NOT_NULL);\n' \
+           '  field(text, name, NOT_NULL);\n' \
+           '\n' \
+           '  primary_key(id)\n' \
+           '};\n' \
+           '\n' \
+           'struct ASP_TABLE test2 {\n' \
+           '  field(integer, id, NOT_NULL);\n' \
+           '  field_fkey(bigint, fid);\n' \
+           '  field_fkey(bigint, ffid);\n' \
+           '\n' \
+           '  primary_key(id, fid)\n' \
+           '/* ссылка на первую таблицу */\n' \
+           '  reference(fid, test(id), CASCADE, SET NULL)\n' \
+           '/* ссылка на внешнюю таблицу */\n' \
+           '  reference(ffid, ftest(id), CASCADE, CASCADE)\n' \
+           '};\n' \
+           '// end of file\n' \
+           '#endif\n'
 
 
 class TestAspDBTablesGenerator(unittest.TestCase):
@@ -100,13 +100,10 @@ class TestAspDBTablesGenerator(unittest.TestCase):
             f.close()
         if os.path.exists(cpp_file):
             # распарсить хэдер
-            gen = asp_db_tg.AspDBTablesGenerator(cpp_file)
+            gen = asp_db_tg.AspDBTablesGenerator(cpp_file, 'TestMacro')
             print('Create module: ' + cpp_module)
-            self.assertEqual(gen.module_name, cpp_module)
+            # self.assertEqual(gen.module_name, 'TestMacro')
             # инициализировать структуры данных
-            #   проверить структуру данных
-            #   тест AspDBTableText
-            raise Exception
+            gen.generate_files()
         else:
             self.assertTrue(False)
-        raise Exception

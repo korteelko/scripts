@@ -116,15 +116,20 @@ class AspDBTablesGenerator:
         self.db_tables_class = ''
         if not module_name:
             self.module_name = header_file[: header_file.find('.')]
-        self.asp_tables = aspdb.AspDBCppFile(self.header_file)
+        else:
+            self.module_name = module_name
+        self.asp_tables = None
+        with open(self.header_file, 'r') as f:
+            self.asp_tables = aspdb.AspDBCppFile(f.read())
 
     def generate_files(self):
-        self.asp_tables.init_structs()
-        self.set_class_name()
-        self.tables = self.init_tables()
-        # self.update_original_header()
-        self.init_tables_header()
-        self.init_tables_source()
+        if self.asp_tables:
+            self.asp_tables.init_structs()
+            self.set_class_name()
+            self.tables = self.init_tables()
+            # self.update_original_header()
+            self.init_tables_header()
+            self.init_tables_source()
 
     def update_original_header(self):
         """
@@ -141,8 +146,9 @@ class AspDBTablesGenerator:
         :return:
         """
         tables = list()
-        for i, struct in enumerate(self.asp_tables.cpp_structs):
-            tables.append(struct.name)
+        if self.asp_tables:
+            for i, struct in enumerate(self.asp_tables.cpp_structs):
+                tables.append(struct.name)
         return tables
 
     def set_class_name(self):
@@ -151,10 +157,9 @@ class AspDBTablesGenerator:
 
         :return:
         """
-        self.db_tables_ns = self.header_file[:self.header_file.find('.')] \
-            if '.' in self.header_file else self.header_file
+        self.db_tables_ns = self.module_name
         self.db_tables_ns = self.db_tables_ns.lower()
-        self.db_tables_enum = self.db_tables_enum + '_tables'
+        self.db_tables_enum = self.db_tables_ns + '_tables'
         # класс наследник IDBTables
         self.db_tables_class = self.db_tables_ns[:1].upper() +\
                                self.db_tables_ns[1:].lower() + self.asp_db_interface[1:]
@@ -169,7 +174,7 @@ class AspDBTablesGenerator:
         text = self.add_defines_h()
         text += self.add_data_structs_h()
         text += self.add_template_specification_h()
-        with open(self.module_name + self.files_suffix + '.h ', 'w') as f:
+        with open(self.module_name + self.files_suffix + '.h', 'w') as f:
             f.write(text)
 
     def add_defines_h(self):
@@ -182,20 +187,28 @@ class AspDBTablesGenerator:
         text = ''
         # строка имён полей
         field_names = ''
-        for i, struct in enumerate(self.asp_tables.cpp_structs):
-            table = struct.name.upper()
-            text += '\n/* table: ' + table + ' */'
-            for j, field in enumerate(struct.fields):
-                # добавим дефайн на поле таблицы
-                text += '#define ' + get_field_define(field.get_name()) + ' \t(' + \
-                        table + ' | ' + str(hex(j + 1)) + ')\n'
-                field_names += '#define ' + get_field_define(field.get_name()) + '_NAME' + ' \t' \
-                               + '"' + field.get_name().lower() + '"\n'
-        tables_defs = ''
-        for i, table in enumerate(self.tables):
-            tables_defs += '#define ' + get_table_define(table) + str(hex((i + 1) * pow(2, 16))) + '\n'
-        text = tables_defs + '\n' + text
-        text += '\n' + field_names + '\n'
+        if self.asp_tables:
+            for i, struct in enumerate(self.asp_tables.cpp_structs):
+                table = struct.name.upper()
+                text += '\n/* table: ' + table + ' */\n'
+                for j, field in enumerate(struct.fields):
+                    # добавим дефайн на поле таблицы
+                    text += '#define ' + get_table_define(table) + '_' + get_field_define(field.get_name()) +\
+                            ' (' + get_table_define(table) + ' | ' + format(j + 1, '#06x') + ')\n'
+                    field_names += '#define ' + get_table_define(table) + '_' + get_field_define(field.get_name()) +\
+                                   '_NAME' + ' ' + '"' + field.get_name().lower() + '"\n'
+                fields_count = len(struct.fields)
+                for k, ref in enumerate(struct.foreign_refs):
+                    text += '#define ' + get_table_define(table) + '_' + get_field_define(ref.field.get_name()) + \
+                            ' (' + get_table_define(table) + ' | ' + format(k + 1 + fields_count, '#06x') + ')\n'
+                    field_names += '#define ' + get_table_define(table) + '_' + get_field_define(ref.field.get_name()) + \
+                                   '_NAME' + ' ' + '"' + ref.field.get_name().lower() + '"\n'
+            tables_defs = ''
+            for i, table in enumerate(self.tables):
+                tables_defs += '#define ' + get_table_define(table) + ' ' +\
+                               format((i + 1) * pow(2, 16), '#010x') + '\n'
+            text = tables_defs + '\n' + text
+            text += '\n' + field_names + '\n'
         return text
 
     def add_data_structs_h(self):
@@ -210,7 +223,7 @@ class AspDBTablesGenerator:
         text += '  table_undefined = UNDEFINED_TABLE'
         for i, table in enumerate(self.tables):
             text += ',\n' + '  ' + get_table_enum(table) + ' \t= ' + get_table_define(table) + ' >> 16'
-        text += '};\n\n'
+        text += '\n};\n\n'
         text += 'class ' + self.db_tables_class + ' final: public ' + self.asp_db_interface + ' {\n'
         text += '  std::string GetTableName(db_table t) const override;\n'
         text += '  const db_fields_collection *GetFieldsCollection(db_table t) const override;\n'
@@ -254,13 +267,13 @@ class AspDBTablesGenerator:
         text = self.add_tables_map()
         for struct in self.asp_tables.cpp_structs:
             text += self.add_table_fields(struct)
-        with open(self.module_name + self.files_suffix + '.cpp ', 'w') as f:
+        with open(self.module_name + self.files_suffix + '.cpp', 'w') as f:
             f.write(text)
 
     def add_tables_map(self):
         text = 'static std::map<db_table, std::string> str_tables = {\n'
         for table in self.tables:
-            text += '  tables_pair(' + get_table_enum(table) + '"' + table + '"),\n'
+            text += '  tables_pair(' + get_table_enum(table) + ', "' + table + '"),\n'
         text += '};\n'
         return text
 
@@ -297,12 +310,12 @@ class AspDBTablesGenerator:
 
         # references
         ref_name = struct.name + '_references'
-        if struct.foreign_keys:
-            ref_str = 'static const std::shared_ptr<db_ref_collection> ' + ref_name + '(\n  new db_ref_collection {\n'
-            for ref in struct.foreign_keys:
-                ref_str += '\ndb_reference(TABLE_FIELD_NAME(' + ref.field.get_name() + '), ' + ref.ref.get_ftable() +\
-                           ',\n' + ref.ref.get_ftable_pk() + ', true, ' + aspdb.ref_act_type(ref.ref.get_update_act) +\
-                           ',\n ' + aspdb.ref_act_type(ref.ref.get_delete_act) + ')'
+        if struct.foreign_refs:
+            ref_str = 'static const std::shared_ptr<db_ref_collection> ' + ref_name + '(\n  new db_ref_collection {'
+            for ref in struct.foreign_refs:
+                ref_str += '\n  db_reference(TABLE_FIELD_NAME(' + ref.field.get_name() + '), ' + ref.ref.get_ftable() +\
+                           ',\n  ' + ref.ref.get_ftable_pk() + ', true, ' + aspdb.ref_act_type(ref.ref.get_update_act()) +\
+                           ',\n  ' + aspdb.ref_act_type(ref.ref.get_delete_act()) + '),'
             ref_str += '});\n'
             text += ref_str
 
@@ -310,7 +323,7 @@ class AspDBTablesGenerator:
         # create_setup
         create_setup = 'static const db_table_create_setup ' + struct.name + '_create_setup(\n'
         create_setup += '  ' + get_table_enum(struct.name) + ', ' + fields_name + ',\n  ' + unique_name + ', '
-        create_setup += ref_name if struct.foreign_keys else 'nullptr'
+        create_setup += ref_name if struct.foreign_refs else 'nullptr'
         create_setup += ');\n'
 
-        return text
+        return text + create_setup

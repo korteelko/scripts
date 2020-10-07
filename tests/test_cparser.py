@@ -122,7 +122,7 @@ class TestAspDBCppFile(unittest.TestCase):
             '  field(integer, i, NOT_NULL);' \
             '  field(text, a);' \
             '' \
-            '  primary_key(i)' \
+            '  primary_key(i, a)' \
             '' \
             '  field_fkey(bigint, fkey, NOT_NULL)' \
             '  reference(fkey, ex(sad), CASCADE, RESTRICT)' \
@@ -139,7 +139,7 @@ class TestAspDBCppFile(unittest.TestCase):
         self.assertFalse(aspf.cpp_structs[0].fields[1].not_null)
         self.assertFalse(aspf.cpp_structs[0].fields[1].is_array)
         # pk
-        self.assertEqual(aspf.cpp_structs[0].primary_key, ['i'])
+        self.assertEqual(aspf.cpp_structs[0].primary_key, ['i', 'a'])
         # fk field
         self.assertEqual(aspf.cpp_structs[0].foreign_refs[0].field.asp_type, 'bigint')
         self.assertEqual(aspf.cpp_structs[0].foreign_refs[0].field.asp_name, 'fkey')
