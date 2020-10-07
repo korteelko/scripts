@@ -46,6 +46,18 @@ class AspDBField:
     def get_name(self):
         return self.asp_name
 
+    def get_flags_str(self):
+        flags_str = ''
+        if self.is_primary_key:
+            flags_str += ' .is_primary_key = true,'
+        if self.not_null:
+            flags_str += ' .can_be_null = false,'
+        if self.is_reference:
+            flags_str += ' .is_reference = true,'
+        if self.is_array:
+            flags_str += ' .is_array = true,'
+        return flags_str
+
 
 class AspDBRefAction(Enum):
     """
@@ -145,6 +157,7 @@ class AspDBCppForeignData:
         """
         self.field = field
         self.ref = ref
+        self.field.is_reference = True
 
 
 class AspDBCppStructs(cpplite.CppStructs):
@@ -160,7 +173,7 @@ class AspDBCppStructs(cpplite.CppStructs):
         self.init_data()
         try:
             # проверить валидность данных
-            self.set_references_flags()
+            # self.set_references_flags()
             self.check_data()
         except BaseException as e:
             print(e)
@@ -197,15 +210,22 @@ class AspDBCppStructs(cpplite.CppStructs):
         :return: Nothing
         :raise: BaseException с описание проблемы
         """
-        field_names = [f.get_name() for f in self.fields]
         for pk in self.primary_key:
-            if pk not in field_names:
-                raise BaseException('Несоответствующее имя поля первичного ключа: ' + pk)
-        # TODO: в программе разделены ссылки и обычные поля, возможно стоит доработать
-        #   момент с разбиением ссылки
-        # for ref in self.foreign_refs:
-        #     if ref.field.get_name() not in field_names:
-        #         raise BaseException('Несоответствующее имя поля внешнего ключа: ' + ref.field.get_name())
+            found = False
+            for field in self.fields:
+                if field.get_name() == pk:
+                    found = True
+                    field.is_primary_key = True
+                    break
+            if not found:
+                for ref in self.foreign_refs:
+                    if ref.field.get_name() == pk:
+                        found = True
+                        ref.field.is_primary_key = True
+                        break
+            if not found:
+                raise BaseException('Несоответствующее имя поля первичного ключа: "' +
+                                    pk + '"!')
 
     def init_fields(self, fields_pattern):
         """
