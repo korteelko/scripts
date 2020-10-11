@@ -9,6 +9,7 @@ cpp_text = '#ifndef SOME_DEFINE\n' \
            'struct ASP_TABLE test {\n' \
            '  field(integer, id, NOT_NULL);\n' \
            '  field(text, name, NOT_NULL);\n' \
+           '  str_functions(name, n2s, s2n)' \
            '\n' \
            '  primary_key(id)\n' \
            '};\n' \
@@ -16,6 +17,7 @@ cpp_text = '#ifndef SOME_DEFINE\n' \
            'struct ASP_TABLE test2 {\n' \
            '  field(integer, id, NOT_NULL);\n' \
            '  field_fkey(bigint, fid);\n' \
+           '  str_functions(fid, n2s, s2n)' \
            '  field_fkey(bigint, ffid);\n' \
            '\n' \
            '  primary_key(id, fid)\n' \
@@ -42,6 +44,9 @@ class TestAspDBTablesGenerator(unittest.TestCase):
         if len(aspf.cpp_structs) == 2:
             self.assertEqual(aspf.cpp_structs[0].name, 'test')
             self.assertEqual(aspf.cpp_structs[1].name, 'test2')
+            # from and to str
+            self.assertEqual(aspf.cpp_structs[0].fields[1].to_str, 'n2s')
+            self.assertEqual(aspf.cpp_structs[0].fields[1].from_str, 's2n')
             # pk
             self.assertEqual(aspf.cpp_structs[1].primary_key, ['id', 'fid'])
             # fk field 0
@@ -57,6 +62,9 @@ class TestAspDBTablesGenerator(unittest.TestCase):
                              asp_db_cpp.AspDBRefAction.CASCADE)
             self.assertEqual(aspf.cpp_structs[1].foreign_refs[0].ref.on_delete,
                              asp_db_cpp.AspDBRefAction.SET_NULL)
+            # from and to str
+            self.assertEqual(aspf.cpp_structs[1].foreign_refs[0].field.to_str, 'n2s')
+            self.assertEqual(aspf.cpp_structs[1].foreign_refs[0].field.from_str, 's2n')
 
             # fk field 1
             self.assertEqual(aspf.cpp_structs[1].foreign_refs[1].field.asp_type, 'bigint')

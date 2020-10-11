@@ -35,6 +35,10 @@ class AspDBField:
         self.is_primary_key = False
         self.is_reference = False
 
+        # функции конвертации строк
+        self.to_str = None
+        self.from_str = None
+
         self.parse_arguments()
 
     def parse_arguments(self):
@@ -112,6 +116,7 @@ def ref_act_type(act):
 class AspDBReference:
     """
     Структура внешнего ключа таблиц
+
     """
     def __init__(self, name, ftable_ref, on_update, on_delete):
         """
@@ -147,6 +152,8 @@ class AspDBReference:
 class AspDBCppForeignData:
     """
     Класс данных внешней таблицы - имя, поле,
+
+    TODO: Может переименовать в AspDBReferenceData?
     """
     def __init__(self, field, ref):
         """
@@ -191,6 +198,7 @@ class AspDBCppStructs(cpplite.CppStructs):
         self.foreign_refs = self.init_foreign_tables()
         # инициализировать уникальные комплексы
         self.unique = self.init_unique()
+        self.init_str_functions()
 
     def set_references_flags(self):
         """
@@ -338,6 +346,45 @@ class AspDBCppStructs(cpplite.CppStructs):
             unique_str = cpplite.get_brace_content(self.source[unique_id:], '(', ')')
             unique = [f.strip() for f in unique_str.split(',')]
         return unique
+
+    def init_str_functions(self):
+        """
+        Инициализировать конвертеры строк(те что преобразуют поля к строкам SQL запросов)
+
+        :return:
+        """
+        str_funcs = re.findall(r'str_functions\s*\(', self.source)
+        str_funcs_ind = -1
+        missed = []
+        for func_pair in str_funcs:
+            str_funcs_ind = self.source.find(func_pair, str_funcs_ind + 1)
+            if str_funcs_ind == -1:
+                missed.append(func_pair + ' ~~ cannot find funcs pair')
+                continue
+            str_funcs_fields = cpplite.get_brace_content(self.source[str_funcs_ind:], '(', ')').split(',')
+            if len(str_funcs_fields) < 3:
+                missed.append(func_pair + ' ~~ cannot split ref')
+                continue
+            found = False
+            for field in self.fields:
+                # Ищем соответствующее поле
+                if field.get_name() == str_funcs_fields[0]:
+                    field.to_str = str_funcs_fields[1].strip()
+                    field.from_str = str_funcs_fields[2].strip()
+                    found = True
+                    break
+            if not found:
+                for ref in self.foreign_refs:
+                    if ref.field.get_name() == str_funcs_fields[0]:
+                        ref.field.to_str = str_funcs_fields[1].strip()
+                        ref.field.from_str = str_funcs_fields[2].strip()
+                        found = True
+                        break
+            if not found:
+                missed.append(func_pair + ' ~~ cannot find field ' + str_funcs_fields[0])
+        if len(missed) > 0:
+            print('Warning: AspDBCppStruct.init_str_functions finished with errors')
+            print(missed)
 
 
 class AspDBCppFile(cpplite.CppFile):
