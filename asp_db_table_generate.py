@@ -315,7 +315,9 @@ class AspDBTablesGenerator:
         text += self.add_get_table_name()
         text += self.add_get_table_code()
         text += self.add_field2str_functions()
+        text += self.add_str2field_functions()
         text += self.add_set_insert_values()
+        text += self.add_set_select_data()
         with open(self.get_file_module_name() + '.cpp', 'w') as f:
             f.write(text)
 
@@ -406,8 +408,16 @@ class AspDBTablesGenerator:
         return text
 
     def add_field2str_functions(self):
-        text = '\n'
+        """
+        Собрать функции преобразования полей таблиц к их строковым
+        представлениям.
+        Дефолтные прокидфваются на шаблонную функцию `field2str(const T &)`.
+        Для особых полей особые обработчики, зарегистрированные в хэддере
+        конфигурации таблицы.
 
+        :return: cpp код
+        """
+        text = '\n'
         for struct in self.asp_tables.cpp_structs:
             default_case = ''
             cp_case = ''
@@ -450,6 +460,12 @@ class AspDBTablesGenerator:
             default_case = '    case ' + get_field_flag(table_name, field.get_name()) + ':\n'
         return [cp_case, default_case]
 
+    def add_str2field_functions(self):
+        """
+        Функция обратная `add_field2str_functions` - строки конвертирует в поля
+        """
+        raise Exception
+
     def add_set_insert_values(self):
         """
         Прописать перегруженные шаблоны методы заполняющие сетап добавления
@@ -477,6 +493,43 @@ class AspDBTablesGenerator:
             text += '  src->values_vec.emplace_back(values);\n'
             text += '}\n'
         return text
+
+    def add_set_select_data(self):
+        """
+        Добавить спецификации шаблонных методов `SetSelectData`
+
+        :return: cpp код
+        """
+        text = '\n'
+        for struct in self.asp_tables.cpp_structs:
+            text += 'template<>\n'
+            # TODO: ??? да почему опять вектор-то, а не итераторы??
+            #   хотя здесь терпимо
+            text += 'void IDBTables::SetSelectData<' + struct.get_name() + '>(db_query_select_result *src,\n' +\
+                    '    std::vector<' + struct.get_name() + '> *out_vec) const {\n'
+            text += '  for (auto &row: src->values) {\n'
+            # TODO: тут дефолтный конструктор ттаблицы БД - не гибко
+            text += '    ' + struct.get_name() + ' tmp;\n'
+            text += '    for (auto &col: row) {\n'
+            text += '      if (0) {/*(sorry)*/\n'
+            for field in struct.fields:
+                text += '      } else if {\n'
+                text += '        select_macro(' + get_field_flag(struct.get_name(), field.get_name()) + ', ' + \
+                        get_field_define(struct.get_name(), field.get_name()) + ', str2field_' + struct.get_name() + \
+                        '(' + get_field_flag(struct.get_name(), field.get_name()) + ', col.second));\n'
+            for ref in struct.foreign_refs:
+                text += '      } else if {\n'
+                text += '        select_macro(' + get_field_flag(struct.get_name(), ref.field.get_name()) + ', ' + \
+                        get_field_define(struct.get_name(), ref.field.get_name()) + ', str2field_' + \
+                        struct.get_name() + '(' + get_field_flag(struct.get_name(), ref.field.get_name()) + \
+                        ', col.second));\n'
+            # закрывающая скобка на последний `else if`
+            text += '      }\n'
+            text += '    }\n'
+            text += '    if (tmp.initialized != ' + get_table_flags(struct.get_name()) + '::f_empty)\n'
+            text += '      out_vec->push_back(std::move(tmp));\n'
+            text += '  }\n'
+            text += '}\n'
 
     def add_str_tables(self):
         text = 'static std::map<db_table, std::string> str_tables = {\n'
